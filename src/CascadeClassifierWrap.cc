@@ -99,6 +99,7 @@ public:
       r.x = center.x - r.width*.5;
       r.y = center.y - r.height*.5;
 
+      this->angles.push_back(angle);
       g_objects.push_back(r);
     }
   }
@@ -118,6 +119,10 @@ public:
 
       this->cc->cc.detectMultiScale(gray, objects, this->scale, this->neighbors,
           0 | CV_HAAR_SCALE_IMAGE, cv::Size(this->minw, this->minh));
+
+      for (unsigned int i = 0; i < objects.size(); i++) {
+        this->angles.push_back(0.0);
+      }
 
       if (this->angle) {
         for (int i = 1; i <= this->steps; i++) {
@@ -145,6 +150,7 @@ public:
       x->Set(Nan::New("y").ToLocalChecked(), Nan::New < Number > (this->res[i].y));
       x->Set(Nan::New("width").ToLocalChecked(), Nan::New < Number > (this->res[i].width));
       x->Set(Nan::New("height").ToLocalChecked(), Nan::New < Number > (this->res[i].height));
+      x->Set(Nan::New("angle").ToLocalChecked(), Nan::New < Number > (this->angles[i]));
       arr->Set(i, x);
     }
 
@@ -168,6 +174,7 @@ private:
   double angle;
   int steps;
   std::vector<cv::Rect> res;
+  std::vector<double> angles;
 };
 
 NAN_METHOD(CascadeClassifierWrap::DetectMultiScale) {
