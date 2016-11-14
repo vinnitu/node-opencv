@@ -3,6 +3,18 @@
 #include "Matrix.h"
 #include <nan.h>
 
+cv::Point2f operator*(cv::Mat_<double> M, const cv::Point2f& p) {
+  cv::Mat_<double> src(3/*rows*/, 1 /*cols*/);
+
+  src(0, 0) = p.x;
+  src(1, 0) = p.y;
+  src(2, 0) = 1.0;
+
+  cv::Mat_<double> dst = M * src; //USE MATRIX ALGEBRA
+  return cv::Point2f(dst(0, 0), dst(1, 0));
+}
+
+
 Nan::Persistent<FunctionTemplate> CascadeClassifierWrap::constructor;
 
 void CascadeClassifierWrap::Init(Local<Object> target) {
@@ -45,17 +57,50 @@ CascadeClassifierWrap::CascadeClassifierWrap(v8::Value* fileName) {
 class AsyncDetectMultiScale: public Nan::AsyncWorker {
 public:
   AsyncDetectMultiScale(Nan::Callback *callback, CascadeClassifierWrap *cc,
-      Matrix* im, double scale, int neighbors, int minw, int minh) :
+      Matrix* im, double scale, int neighbors, int minw, int minh, double angle, int steps) :
       Nan::AsyncWorker(callback),
       cc(cc),
       im(im),
       scale(scale),
       neighbors(neighbors),
       minw(minw),
-      minh(minh) {
+      minh(minh),
+      angle(angle),
+      steps(steps) {
   }
   
   ~AsyncDetectMultiScale() {
+  }
+
+
+  void Rotate2D(double angle, const cv::Mat & src, std::vector < cv::Rect > & g_objects) {
+    cv::Point2f center(src.cols/2.0, src.rows/2.0);
+    cv::Mat rot = getRotationMatrix2D(center, angle, 1.0);
+    cv::Rect bbox = cv::RotatedRect(center, src.size(), angle).boundingRect();
+    rot.at<double>(0, 2) += bbox.width/2.0 - center.x;
+    rot.at<double>(1, 2) += bbox.height/2.0 - center.y;
+
+    cv::Mat irot;
+    invertAffineTransform(rot, irot);
+
+    cv::Mat rotated;
+    warpAffine(src, rotated, rot, bbox.size());
+
+    std::vector < cv::Rect > objects;
+    this->cc->cc.detectMultiScale(rotated, objects, this->scale, this->neighbors,
+        0 | CV_HAAR_SCALE_IMAGE, cv::Size(this->minw, this->minh));
+
+    for (size_t i = 0; i < objects.size(); i++) {
+      cv::Rect & r = objects[i];
+
+      cv::Point center(r.x + r.width*.5, r.y + r.height*.5);
+      center = irot*center;
+
+      r.x = center.x - r.width*.5;
+      r.y = center.y - r.height*.5;
+
+      g_objects.push_back(r);
+    }
   }
 
   void Execute() {
@@ -70,8 +115,17 @@ public:
       } else {
         gray = this->im->mat;
       }
+
       this->cc->cc.detectMultiScale(gray, objects, this->scale, this->neighbors,
           0 | CV_HAAR_SCALE_IMAGE, cv::Size(this->minw, this->minh));
+
+      if (this->angle) {
+        for (int i = 1; i <= this->steps; i++) {
+          Rotate2D(-i*this->angle, gray, objects);
+          Rotate2D(+i*this->angle, gray, objects);
+        }
+      }
+
       res = objects;
     } catch (cv::Exception& e) {
       SetErrorMessage(e.what());
@@ -111,6 +165,8 @@ private:
   int neighbors;
   int minw;
   int minh;
+  double angle;
+  int steps;
   std::vector<cv::Rect> res;
 };
 
@@ -143,9 +199,20 @@ NAN_METHOD(CascadeClassifierWrap::DetectMultiScale) {
     minh = info[5]->IntegerValue();
   }
 
+
+  double angle = 0.0;
+  if (info.Length() > 6 && info[6]->IsNumber()) {
+    angle = info[6]->NumberValue();
+  }
+
+  int steps = 1;
+  if (info.Length() > 7 && info[7]->IsInt32()) {
+    steps = info[7]->IntegerValue();
+  }
+
   Nan::Callback *callback = new Nan::Callback(cb.As<Function>());
 
   Nan::AsyncQueueWorker( new AsyncDetectMultiScale(callback, self, im, scale,
-          neighbors, minw, minh));
+          neighbors, minw, minh, angle, steps));
   return;
 }

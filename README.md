@@ -50,7 +50,7 @@ Run the examples from the parent directory.
 
 ```javascript
 cv.readImage("./examples/files/mona.png", function(err, im){
-  im.detectObject(cv.FACE_CASCADE, {}, function(err, faces){
+  im.detectObject(cv.FACE_CASCADE, {angle: 5, steps: 3}, function(err, faces){
     for (var i=0;i<faces.length; i++){
       var x = faces[i]
       im.ellipse(x.x + x.width/2, x.y + x.height/2, x.width/2, x.height/2);
