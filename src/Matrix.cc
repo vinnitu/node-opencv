@@ -48,6 +48,7 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "saveAsync", SaveAsync);
   Nan::SetPrototypeMethod(ctor, "resize", Resize);
   Nan::SetPrototypeMethod(ctor, "rotate", Rotate);
+  Nan::SetPrototypeMethod(ctor, "rotateTo", RotateTo);
   Nan::SetPrototypeMethod(ctor, "warpAffine", WarpAffine);
   Nan::SetPrototypeMethod(ctor, "copyTo", CopyTo);
   Nan::SetPrototypeMethod(ctor, "convertTo", ConvertTo);
@@ -80,7 +81,6 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "drawAllContours", DrawAllContours);
   Nan::SetPrototypeMethod(ctor, "goodFeaturesToTrack", GoodFeaturesToTrack);
   Nan::SetPrototypeMethod(ctor, "houghLinesP", HoughLinesP);
-  Nan::SetPrototypeMethod(ctor, "crop", Crop);
   Nan::SetPrototypeMethod(ctor, "houghCircles", HoughCircles);
   Nan::SetPrototypeMethod(ctor, "inRange", inRange);
   Nan::SetPrototypeMethod(ctor, "adjustROI", AdjustROI);
@@ -1735,18 +1735,75 @@ NAN_METHOD(Matrix::Rotate) {
   //-------------
   int x = info[1]->IsUndefined() ? round(self->mat.size().width / 2) :
       info[1]->Uint32Value();
-  int y = info[1]->IsUndefined() ? round(self->mat.size().height / 2) :
+  int y = info[2]->IsUndefined() ? round(self->mat.size().height / 2) :
       info[2]->Uint32Value();
 
-  cv::Point center = cv::Point(x,y);
-  rotMatrix = getRotationMatrix2D(center, angle, 1.0);
 
+  cv::Point center = cv::Point(x,y);
+  rotMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
   cv::warpAffine(self->mat, res, rotMatrix, self->mat.size());
+
   ~self->mat;
   self->mat = res;
 
   return;
 }
+
+NAN_METHOD(Matrix::RotateTo) {
+//  SETUP_FUNCTION(Matrix)
+  Nan::HandleScope scope;
+
+  Local < Object > im_h = Nan::New(Matrix::constructor)->GetFunction()->NewInstance();
+  Matrix *dest = Nan::ObjectWrap::Unwrap<Matrix>(im_h);
+  info.GetReturnValue().Set(im_h);
+
+  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
+  cv::Mat rotMatrix(2, 3, CV_32FC1);
+
+  float angle = info[0]->ToNumber()->Value();
+
+  // Modification by SergeMv
+  //-------------
+  // If you provide only the angle argument and the angle is multiple of 90, then
+  // we do a fast thing
+  bool rightOrStraight = (ceil(angle) == angle) && (!((int)angle % 90))
+      && (info.Length() == 1);
+  if (rightOrStraight) {
+    int angle2 = ((int)angle) % 360;
+    if (!angle2) {
+        self->mat.copyTo(dest->mat);
+        return;
+    }
+    if (angle2 < 0) {angle2 += 360;}
+    // See if we do right angle rotation, we transpose the matrix:
+    if (angle2 % 180) {
+      cv::transpose(self->mat, dest->mat);
+    }
+    // Now flip the image
+    int mode = -1;// flip around both axes
+    // If counterclockwise, flip around the x-axis
+    if (angle2 == 90) {mode = 0;}
+    // If clockwise, flip around the y-axis
+    if (angle2 == 270) {mode = 1;}
+    cv::flip(self->mat, dest->mat, mode);
+    return;
+  }
+
+  int x = info[1]->IsUndefined() ? round(self->mat.size().width / 2) :
+      info[1]->Uint32Value();
+  int y = info[2]->IsUndefined() ? round(self->mat.size().height / 2) :
+      info[2]->Uint32Value();
+
+  cv::Point center = cv::Point(x, y);
+  rotMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
+
+  cv::Rect bbox = cv::RotatedRect(center, self->mat.size(), angle).boundingRect();
+  rotMatrix.at<double>(0, 2) += bbox.width/2 - center.x;
+  rotMatrix.at<double>(1, 2) += bbox.height/2 - center.y;
+
+  cv::warpAffine(self->mat, dest->mat, rotMatrix, bbox.size());
+}
+
 
 NAN_METHOD(Matrix::GetRotationMatrix2D) {
   Nan::HandleScope scope;
