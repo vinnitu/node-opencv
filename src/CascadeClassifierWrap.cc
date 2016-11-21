@@ -45,14 +45,16 @@ CascadeClassifierWrap::CascadeClassifierWrap(v8::Value* fileName) {
 class AsyncDetectMultiScale: public Nan::AsyncWorker {
 public:
   AsyncDetectMultiScale(Nan::Callback *callback, CascadeClassifierWrap *cc,
-      Matrix* im, double scale, int neighbors, int minw, int minh) :
+      Matrix* im, double scale, int neighbors, int minw, int minh, int maxw, int maxh) :
       Nan::AsyncWorker(callback),
       cc(cc),
       im(im),
       scale(scale),
       neighbors(neighbors),
       minw(minw),
-      minh(minh) {
+      minh(minh),
+      maxw(maxw),
+      maxh(maxh) {
   }
   
   ~AsyncDetectMultiScale() {
@@ -71,8 +73,8 @@ public:
         gray = this->im->mat;
       }
 
-      this->cc->cc.detectMultiScale(gray, objects, this->scale, this->neighbors,
-          0 | CV_HAAR_SCALE_IMAGE, cv::Size(this->minw, this->minh));
+      this->cc->cc.detectMultiScale(gray, objects, this->scale, this->neighbors, 0 | CV_HAAR_SCALE_IMAGE,
+          cv::Size(this->minw, this->minh), cv::Size(this->maxw, this->maxh));
 
       res = objects;
     } catch (cv::Exception& e) {
@@ -113,6 +115,8 @@ private:
   int neighbors;
   int minw;
   int minh;
+  int maxw;
+  int maxh;
   std::vector<cv::Rect> res;
 };
 
@@ -145,9 +149,16 @@ NAN_METHOD(CascadeClassifierWrap::DetectMultiScale) {
     minh = info[5]->IntegerValue();
   }
 
+  int maxw = 0;
+  int maxh = 0;
+  if (info.Length() > 7 && info[6]->IsInt32() && info[7]->IsInt32()) {
+    maxw = info[6]->IntegerValue();
+    maxh = info[7]->IntegerValue();
+  }
+
   Nan::Callback *callback = new Nan::Callback(cb.As<Function>());
 
   Nan::AsyncQueueWorker( new AsyncDetectMultiScale(callback, self, im, scale,
-          neighbors, minw, minh));
+          neighbors, minw, minh, maxw, maxh));
   return;
 }
