@@ -80,6 +80,7 @@ public:
   JSFUNC(Canny)
   JSFUNC(Dilate)
   JSFUNC(Erode)
+  JSFUNC(Laplacian)
 
   JSFUNC(FindContours)
   JSFUNC(DrawContour)

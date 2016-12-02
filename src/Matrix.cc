@@ -76,6 +76,7 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "canny", Canny);
   Nan::SetPrototypeMethod(ctor, "dilate", Dilate);
   Nan::SetPrototypeMethod(ctor, "erode", Erode);
+  Nan::SetPrototypeMethod(ctor, "laplacian", Laplacian);
   Nan::SetPrototypeMethod(ctor, "findContours", FindContours);
   Nan::SetPrototypeMethod(ctor, "drawContour", DrawContour);
   Nan::SetPrototypeMethod(ctor, "drawAllContours", DrawAllContours);
@@ -1468,6 +1469,19 @@ NAN_METHOD(Matrix::Erode) {
   cv::erode(self->mat, self->mat, kernel, cv::Point(-1, -1), niters);
 
   info.GetReturnValue().Set(Nan::Null());
+}
+
+NAN_METHOD(Matrix::Laplacian) {
+  Nan::HandleScope scope;
+
+  Local<Object> result_to_return = Nan::New(Matrix::constructor)->GetFunction()->NewInstance();
+  Matrix *result = Nan::ObjectWrap::Unwrap<Matrix>(result_to_return);
+  info.GetReturnValue().Set(result_to_return);
+
+  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
+  int ddepth = info[0]->IntegerValue();
+
+  cv::Laplacian(self->mat, result->mat, ddepth);
 }
 
 NAN_METHOD(Matrix::FindContours) {
