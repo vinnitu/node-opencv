@@ -114,6 +114,7 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "reshape", Reshape);
   Nan::SetPrototypeMethod(ctor, "release", Release);
   Nan::SetPrototypeMethod(ctor, "subtract", Subtract);
+  Nan::SetPrototypeMethod(ctor, "phash", pHash);
 
   target->Set(Nan::New("Matrix").ToLocalChecked(), ctor->GetFunction());
 };
@@ -2751,4 +2752,31 @@ NAN_METHOD(Matrix::Subtract) {
   self->mat -= other->mat;
 
   return;
+}
+
+NAN_METHOD(Matrix::pHash) {
+  SETUP_FUNCTION(Matrix)
+
+  std::string hash(64, '\0');
+
+  cv::Mat img;
+  cv::resize(self->mat, img, cv::Size(32, 32));
+  img = cv::Mat_<double>(img);
+
+  cv::Mat dst;
+  cv::dct(img, dst);
+
+  dst = dst( cv::Rect(1, 1, 8, 8) );
+  cv::Scalar imageMean = cv::mean(dst);
+
+  cv::Mat mask = (dst >= imageMean[0]);
+  for (int i = 0; i<mask.rows; i++) {
+      for (int j = 0; j<mask.cols; j++) {
+          mask.at<uchar>(i, j) == 0 ? (hash[i*mask.cols + j] = '0') 
+              : (hash[i*mask.cols + j] = '1');
+      }
+  }
+
+  Local<Value> returned_value = Nan::New(hash).ToLocalChecked();
+  info.GetReturnValue().Set( returned_value );
 }
