@@ -2759,18 +2759,18 @@ NAN_METHOD(Matrix::pHash) {
 
   std::string hash(64, '\0');
 
-  cv::Mat image;
+
+  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
+
+  cv::Mat gray;
   if (self->mat.channels() == 3) {
-    image = self->mat;
-  } else if (self->mat.channels() == 1) {
-    cv::Mat myimg = self->mat;
-    cv::cvtColor(myimg, image, CV_GRAY2RGB);
+    cv::cvtColor(self->mat, gray, CV_BGR2GRAY);
   } else {
-    Nan::ThrowError("those channels are not supported");
+    gray = self->mat;
   }
 
   cv::Mat img;
-  cv::resize(image, img, cv::Size(32, 32));
+  cv::resize(gray, img, cv::Size(32, 32));
   img = cv::Mat_<double>(img);
 
   cv::Mat dst;
