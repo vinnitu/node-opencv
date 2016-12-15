@@ -2759,9 +2759,6 @@ NAN_METHOD(Matrix::pHash) {
 
   std::string hash(64, '\0');
 
-
-  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
-
   cv::Mat gray;
   if (self->mat.channels() == 3) {
     cv::cvtColor(self->mat, gray, CV_BGR2GRAY);
